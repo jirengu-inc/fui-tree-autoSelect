@@ -20,7 +20,7 @@ const TreeItem: React.FC<Props> = (props) => {
   const checked = treeProps.multiple ?
     treeProps.selected.indexOf(item.value) >= 0 :
     treeProps.selected === item.value;
-  const onChange: ChangeEventHandler<{ checked: boolean }> = (e) => {
+  const onChange: ChangeEventHandler<HTMLInputElement> = (e) => {
     if (treeProps.multiple) {
       if (e.target.checked) {
         treeProps.onChange([...treeProps.selected, item.value]);
