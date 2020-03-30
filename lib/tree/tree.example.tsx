@@ -30,7 +30,7 @@ const TreeExample: React.FC = (props) => {
   return (
     <div>Tree
       <h1>展示数据</h1>
-      selectedValues: {selectedValues}
+      selectedValues: {selectedValues.join(' , ')}
       <div style={{width: 200}}>
         <Tree sourceData={array}
               selected={selectedValues}

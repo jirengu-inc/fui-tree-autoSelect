@@ -1,12 +1,16 @@
-import React, {ChangeEventHandler, useRef, useState} from 'react';
+import React, {ChangeEventHandler, useEffect, useRef} from 'react';
 import {scopedClassMaker} from '../helpers/classes';
 import useUpdate from '../hooks/useUpdate';
+import useToggle from '../hooks/useToggle';
 
 interface Props {
   item: SourceDataItem;
   level: number;
   treeProps: TreeProps;
+  onItemChange: (values: string[]) => void;
 }
+
+interface RecursiveArray<T> extends Array<T | RecursiveArray<T>> {}
 
 const scopedClass = scopedClassMaker('fui-tree');
 const sc = scopedClass;
@@ -21,53 +25,10 @@ const TreeItem: React.FC<Props> = (props) => {
     treeProps.selected.indexOf(item.value) >= 0 :
     treeProps.selected === item.value;
 
-  function collectChildrenValues(item: SourceDataItem): string[] {
-    return flatten(item.children?.map(i => [i.value, collectChildrenValues(i)]));
-  }
+  const {value: expanded, expand, collapse} = useToggle(true);
 
-  interface RecursiveArray<T> extends Array<T | RecursiveArray<T>> {}
-
-  function flatten(array?: RecursiveArray<string>): string[] {
-    if (!array) {return [];}
-    return array.reduce<string[]>((result, current) =>
-      result.concat(typeof current === 'string' ? current : flatten(current)), []);
-    // const result = [];
-    // for (let i = 0; i < array.length; i++) {
-    //   if (array[i] instanceof Array) {
-    //     result.push(...flatten(array[i] as RecursiveArray<string>));
-    //   } else {
-    //     result.push(array[i] as string);
-    //   }
-    // }
-    // return result;
-  }
-
-  const onChange: ChangeEventHandler<HTMLInputElement> = (e) => {
-    const childrenValues = collectChildrenValues(item);
-    if (treeProps.multiple) {
-      if (e.target.checked) {
-        treeProps.onChange([...treeProps.selected, item.value, ...childrenValues]);
-      } else {
-        treeProps.onChange(treeProps.selected.filter(value =>
-          value !== item.value && childrenValues.indexOf(value) === -1)
-        );
-      }
-    } else {
-      if (e.target.checked) {
-        treeProps.onChange(item.value);
-      } else {
-        treeProps.onChange('');
-      }
-    }
-  };
-  const expand = () => {
-    setExpanded(true);
-  };
-  const collapse = () => {
-    setExpanded(false);
-  };
-  const [expanded, setExpanded] = useState(true);
   const divRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useUpdate(expanded, () => {
     if (!divRef.current) {return;}
@@ -103,10 +64,40 @@ const TreeItem: React.FC<Props> = (props) => {
     }
   });
 
+  const onChange: ChangeEventHandler<HTMLInputElement> = (e) => {
+    const childrenValues = collectChildrenValues(item);
+    if (treeProps.multiple) {
+      if (e.target.checked) {
+        props.onItemChange([...treeProps.selected, item.value, ...childrenValues]);
+      } else {
+        props.onItemChange(treeProps.selected.filter(value =>
+          value !== item.value && childrenValues.indexOf(value) === -1)
+        );
+      }
+    } else {
+      if (e.target.checked) {
+        treeProps.onChange(item.value);
+      } else {
+        treeProps.onChange('');
+      }
+    }
+  };
+  const onItemChange = (values: string[]) => {
+    const childrenValues = collectChildrenValues(item);
+    const common = intersect(values, childrenValues);
+    if (common.length !== 0) {
+      props.onItemChange(Array.from(new Set(values.concat(item.value))));
+      inputRef.current!.indeterminate = common.length !== childrenValues.length;
+    } else {
+      props.onItemChange(values.filter(v => v !== item.value));
+      inputRef.current!.indeterminate = false;
+    }
+  };
+
 
   return <div key={item.value} className={sc(classes)}>
     <div className={sc('text')}>
-      <input type="checkbox" onChange={onChange} checked={checked}/>
+      <input ref={inputRef} type="checkbox" onChange={onChange} checked={checked}/>
       {item.text}
       {item.children &&
       <span onSelect={e => e.preventDefault()}>
@@ -119,7 +110,7 @@ const TreeItem: React.FC<Props> = (props) => {
     </div>
     <div ref={divRef} className={sc({children: true, collapsed: !expanded})}>
       {item.children?.map(sub =>
-        <TreeItem key={sub.value} item={sub} level={level + 1} treeProps={treeProps}/>
+        <TreeItem key={sub.value} item={sub} level={level + 1} onItemChange={onItemChange} treeProps={treeProps}/>
       )}
     </div>
   </div>;
@@ -127,3 +118,33 @@ const TreeItem: React.FC<Props> = (props) => {
 
 
 export default TreeItem;
+
+function collectChildrenValues(item: SourceDataItem): string[] {
+  return flatten(item.children?.map(i => [i.value, collectChildrenValues(i)]));
+}
+
+function flatten(array?: RecursiveArray<string>): string[] {
+  if (!array) {return [];}
+  return array.reduce<string[]>((result, current) =>
+    result.concat(typeof current === 'string' ? current : flatten(current)), []);
+  // const result = [];
+  // for (let i = 0; i < array.length; i++) {
+  //   if (array[i] instanceof Array) {
+  //     result.push(...flatten(array[i] as RecursiveArray<string>));
+  //   } else {
+  //     result.push(array[i] as string);
+  //   }
+  // }
+  // return result;
+}
+
+function intersect<T>(array1: T[], array2: T[]): T[] {
+  const result: T[] = [];
+  for (let i = 0; i < array1.length; i++) {
+    if (array2.indexOf(array1[i]) >= 0) {
+      result.push(array1[i]);
+    }
+  }
+  return result;
+}
+
